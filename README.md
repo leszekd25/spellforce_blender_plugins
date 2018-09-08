@@ -38,6 +38,38 @@ requirements:
 
 -both files have the same name (except file format)
 
+-mesh is in original, unedited form (as in, exact same mesh as it was bundled with spellforce)
+
 same requirements as with base mesh import plugin
 
 usage: File -> Import... (only select .msb file)
+
+WARNING: meshes loaded with skeleton are no longer editable due to mesh transformations required for animations to work (more work on it in the future)
+
+NOTE: bone orientations do not look properly in blender for now, but the model and skeleton receive transformations properly
+
+# spellforce_import_animation
+
+you can choose any .bob file to open and edit in blender
+
+requirements:
+
+-selected object in blender is armature (skeleton)
+
+-number of bones in skeleton and animation must match
+
+for obvious reasons, animations only work with skeleton files imported with the spellforce_import_with_skeleton plugin
+
+usage: File -> Imoprt...
+
+# spellforce_export_animation
+
+any edited animation can be exported to .bob animation file
+
+for same reasons, this will work properly only if animation was first imported using the plugin mentioned above
+
+requirements:
+
+-selected object in blender is armature (skeleton)
+
+usage: File -> Export...
