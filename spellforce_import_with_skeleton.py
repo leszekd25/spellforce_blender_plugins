@@ -3,8 +3,8 @@ bl_info = {
 	"author": "leszekd25",
 	"version": (1, 0, 0),
 	"blender": (2, 78, 0),
-	"location": "File > Import > Mesh File (.msb)",
-	"description": "Import Spellforce Mesh Data",
+	"location": "File > Import > Mesh File (.msb + .bor)",
+	"description": "Import Spellforce Mesh+Skeleton Data",
 	"warning": "totally untested",
 	"category": "Import-Export",
 }
@@ -122,7 +122,7 @@ def msbimport(infile, bDebugLogMSB, bImportSkeleton):
 		def to_CS(self):
 			new_CS = SFCoordinateSystem()
 			new_CS.translation = self.translation
-			new_CS.orientation = SF_MatrixFromQuaternion(self.orientation)
+			new_CS.orientation = self.orientation.to_matrix()
 			return new_CS
 	
 	class SFCoordinateSystem:
@@ -511,23 +511,13 @@ def msbimport(infile, bDebugLogMSB, bImportSkeleton):
 		for i in range(len(skeleton.bones)):
 			bone = skeleton.bones[i]
 			newparent = None
-			mat = Matrix4FromCS(bone.cs_global)
-			
 			newbone = ob_new.data.edit_bones.new(bone.name)
 			newbone.head = [0, 0, 0]
 			if bone.parent != -1:
 				newparent = ob_new.data.edit_bones[bone.parent]
 				newbone.parent = newparent
-				newbone.head = bone.cs_global.translation
-				newbone.tail = [newbone.head[0], newbone.head[1]+0.0001, newbone.head[2]]
-				if skeleton.bones[bone.parent].blender_set == False:
-					newparent.tail = newbone.head
-					if newparent.tail[0] == newparent.head[0] and newparent.tail[1] == newparent.head[1] and newparent.tail[2] == newparent.head[2]:
-						newparent.tail = [newparent.tail[0], newparent.tail[1]+0.0001, newparent.tail[2]]
-					skeleton.bones[bone.parent].blender_set = True
-			else:
-				newbone.head = bone.cs_global.translation
-				newbone.tail = [newbone.head[0], newbone.head[1]+0.0001, newbone.head[2]]
+			newbone.head = [0, 0, 0]
+			newbone.tail = [0, 0.1, 0]
 			newbone.use_inherit_rotation = True
 			newbone.use_inherit_scale = False
 			newbone.use_local_location = False
@@ -539,13 +529,30 @@ def msbimport(infile, bDebugLogMSB, bImportSkeleton):
 			bone = skeleton.bones[i]
 			posebone = ob_new.pose.bones[bone.name]
 			posebone.rotation_mode = 'QUATERNION'
+			posebone.location = bone.sv.translation
+			posebone.rotation_quaternion = bone.sv.orientation
+			
+		#transform vertices...
+		ob_new.select = False
+		final_mesh.select = True
 		
+		
+		for i in range(len(me_ob.vertices)):
+			me_ob.vertices[i].co = [0, 0, 0]
+			
+		bpy.ops.object.mode_set(mode = 'EDIT')
+		for bone in skeleton.bones:
+			for v in bone.blender_vertices:
+				print(v.id)
+				me_ob.vertices[v.id].co = [me_ob.vertices[v.id].co[0]+v.pos[0]*v.weight, me_ob.vertices[v.id].co[1]+v.pos[1]*v.weight, me_ob.vertices[v.id].co[2]+v.pos[2]*v.weight]
+				
 		bpy.ops.object.mode_set(mode = 'OBJECT')
 		for bone in skeleton.bones:
-			skinmesh = final_mesh.data
 			group = final_mesh.vertex_groups.new(bone.name)
+			print(bone.name)
 			for v in bone.blender_vertices:
 				group.add([v.id], v.weight, "ADD")
+				
 		final_mesh.data.update()
 			
 	bpy.context.scene.update()
@@ -608,7 +615,7 @@ class import_msb(bpy.types.Operator):
 		return {'RUNNING_MODAL'}
 
 def menu_func(self, context):
-	self.layout.operator(import_msb.bl_idname, text="Spellforce Mesh (.msb)")
+	self.layout.operator(import_msb.bl_idname, text="Spellforce Mesh/Skeleton (.msb/.bor)")
 
 def register():
 	bpy.utils.register_module(__name__)
