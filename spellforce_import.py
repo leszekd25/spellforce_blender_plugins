@@ -197,6 +197,7 @@ def msbimport(infile, bDebugLogMSB):
 		matdata.diffuse_color = [mat.diffCol[2]/255,  mat.diffCol[1]/255,  mat.diffCol[0]/255]
 		matdata.specular_color = [mat.specCol[2]/255, mat.specCol[1]/255, mat.specCol[0]/255]
 		matdata["SFRenderMode"] = mat.texMain.texRenderMode
+		matdata["SFFlags"] = mat.texMain.flag
 		mtex = matdata.texture_slots.add()
 		mtex.texture = tex
 		mtex.texture_coords = 'UV'

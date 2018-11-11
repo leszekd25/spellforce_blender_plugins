@@ -165,6 +165,10 @@ def msbexport(infile, bDebugLogMSB): #single model static mesh (equipment, decor
 			models[i].material.texMain.texRenderMode = bl_material["SFRenderMode"]
 		else:
 			models[i].material.texMain.texRenderMode = 0
+		if bl_material.get("SFFlags") is not None:
+			models[i].material.texMain.flag = bl_material["SFFlags"]
+		else:
+			models[i].material.texMain.flag = 7
 		models[i].material.texMain.texAlpha = int(bl_material.texture_slots[0].alpha_factor*255)
 		models[i].material.texMain.texName = bl_material.texture_slots[0].name
 	for i in range(modelnum):
