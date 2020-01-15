@@ -73,3 +73,7 @@ name.bor goes to animation folder
 name.bsi goes to skinning/b20 folder
 
 name_SKIN goes to skinning/b20 folder, and you must REMOVE the _SKIN part of the filename
+
+# animation support
+
+not here for now : ( you probably still need to use blender 2.78/2.79 for that
