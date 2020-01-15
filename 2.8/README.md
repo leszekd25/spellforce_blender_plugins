@@ -60,6 +60,8 @@ requirements:
 
 -all vertices are assigned to at least one vertex group
 
+-all requirements for exporting static models also apply here
+
 usage: File -> Export... (only specify .msb file
 
 **note**: 4 files will be generated upon using this plugin: name.msb, name.bor, name.bsi and name_SKIN.msb
