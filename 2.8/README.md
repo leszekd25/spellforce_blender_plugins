@@ -72,7 +72,7 @@ name.bor goes to animation folder
 
 name.bsi goes to skinning/b20 folder
 
-name_SKIN goes to skinning/b20 folder, and you must REMOVE the _SKIN part of the filename
+name_SKIN.msb goes to skinning/b20 folder, and you must REMOVE the _SKIN part of the filename
 
 # animation support
 
