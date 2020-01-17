@@ -256,6 +256,41 @@ def SaveMSBSkinned(context, filepath):
 		# write header
 		outdata2 = pack("2b4H", 0, 2, len(unique_verts_per_material[i]), 0, len(triangles_per_material[i]), 0)
 		msbfile.write(outdata2)
+			
+		ind_array = [0 for k in range(len(triangles_per_material[i])*3)]
+		for k, v in enumerate(unique_verts_per_material[i]):
+			for ix in v[2]:
+				ind_array[ix] = k
+		
+		
+		# calculate positions and normals
+		vertex_positions = []
+		for v in unique_verts_per_material[i]:
+			vertex_positions.append(mesh.vertices[v[0]].co)	
+			
+		normals_per_triangle = [[] for j in range(len(triangles_per_material[i]))]
+		normals_per_vertex = [[0, 0, 0] for j in range(len(unique_verts_per_material[i]))]
+		for k in range(len(ind_array)//3):
+			v1 = vertex_positions[ind_array[3*k+0]]
+			v2 = vertex_positions[ind_array[3*k+1]]
+			v3 = vertex_positions[ind_array[3*k+2]]
+			
+			U = [v2[0]-v1[0], v2[1]-v1[1], v2[2]-v1[2]]
+			V = [v3[0]-v1[0], v3[1]-v1[1], v3[2]-v1[2]]
+			nm = [U[1]*V[2] - U[2]*V[1], U[2]*V[0] - U[0]*V[2], U[0]*V[1] - U[1]*V[0]]
+			nm_l = (nm[0]*nm[0] + nm[1]*nm[1] + nm[2]*nm[2])**0.5
+			nm2 = [nm[0]/nm_l, nm[1]/nm_l, nm[2]/nm_l]
+			normals_per_triangle[k] = nm2
+			
+			nmv1 = normals_per_vertex[ind_array[3*k+0]]
+			nmv1 = [nmv1[0]+nm2[0], nmv1[1]+nm2[1], nmv1[2]+nm2[2]]
+			normals_per_vertex[ind_array[3*k+0]] = nmv1
+			nmv2 = normals_per_vertex[ind_array[3*k+1]]
+			nmv2 = [nmv2[0]+nm2[0], nmv2[1]+nm2[1], nmv2[2]+nm2[2]]
+			normals_per_vertex[ind_array[3*k+1]] = nmv2
+			nmv3 = normals_per_vertex[ind_array[3*k+2]]
+			nmv3 = [nmv3[0]+nm2[0], nmv3[1]+nm2[1], nmv3[2]+nm2[2]]
+			normals_per_vertex[ind_array[3*k+2]] = nmv3
 		
 		for v in unique_verts_per_material[i]:
 			pos = mesh.vertices[v[0]].co
@@ -266,13 +301,8 @@ def SaveMSBSkinned(context, filepath):
 			packed_vertices_per_material[i].append([pos, normal, col, uv, ind])
 			outdata3 = pack('6f4B2fI', pos[0], pos[1], pos[2], normal[0], normal[1], normal[2], col[0], col[1], col[2], col[3], uv[0], 1-uv[1], ind)
 			msbfile.write(outdata3)
-			# write to file
-		
-		ind_array = [0 for k in range(len(triangles_per_material[i])*3)]
-		for k, v in enumerate(unique_verts_per_material[i]):
-			for ix in v[2]:
-				ind_array[ix] = k
-			# write to file
+			
+			
 		for k in range(len(ind_array)//3):
 			packed_triangles_per_material[i].append([ind_array[3*k+0], ind_array[3*k+1], ind_array[3*k+2]])
 			outdata4 = pack("4H", ind_array[3*k+0], ind_array[3*k+2], ind_array[3*k+1], i)
