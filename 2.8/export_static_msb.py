@@ -108,6 +108,15 @@ def SaveMSBStatic(context, filepath):
 					vert[2].append(3*j+k)
 				else:
 					found_v[2].append(3*j+k)
+	
+	# adjust material count to exclude empty meshbuffers
+	mat_offset = 0
+	for i in range(modelnum):
+		if((len(unique_verts_per_material[i-mat_offset]) == 0) or (len(triangles_per_material[i-mat_offset]) == 0)):
+			del unique_verts_per_material[i-mat_offset]
+			del triangles_per_material[i-mat_offset]
+			mat_offset += 1
+	modelnum = len(unique_verts_per_material)
 
 	bbox_per_model = [[10000, 10000, 10000, -10000, -10000, -10000] for i in range(modelnum)]
 	bbox_total = [10000, 10000, 10000, -10000, -10000, -10000]

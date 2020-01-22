@@ -206,7 +206,6 @@ def SaveMSBSkinned(context, filepath):
 	#print(triangles_per_material)
 	uv_layer = mesh.uv_layers[mesh.name]
 	unique_verts_per_material = [[] for i in range(modelnum)]  # unique vert: [vertex index, unique uv]
-	total_t = 0
 	for i, tpm in enumerate(triangles_per_material):
 		for j, t in enumerate(tpm):
 			for k in range(3):
@@ -218,8 +217,16 @@ def SaveMSBSkinned(context, filepath):
 					vert[2].append(3*j+k)
 				else:
 					found_v[2].append(3*j+k)
-		total_t += len(tpm)
 	#print(unique_verts_per_material)
+    
+    # adjust material count to exclude empty meshbuffers
+	mat_offset = 0
+	for i in range(modelnum):
+		if((len(unique_verts_per_material[i-mat_offset]) == 0) or (len(triangles_per_material[i-mat_offset]) == 0)):
+			del unique_verts_per_material[i-mat_offset]
+			del triangles_per_material[i-mat_offset]
+			mat_offset += 1
+	modelnum = len(unique_verts_per_material)
 
 	# calculate bounding boxes for the parts of mesh
 	bbox_per_model = [[10000, 10000, 10000, -10000, -10000, -10000] for i in range(modelnum)]

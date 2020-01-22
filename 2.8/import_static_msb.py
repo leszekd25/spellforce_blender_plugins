@@ -177,21 +177,10 @@ def LoadMSBStatic(context, filepath):
 		mat = model.meshbuffers[t].material
 		materialname = "Material "+str(t+1)
 		matdata = bpy.data.materials.new(materialname)
-		"""
-		matdata.specular_intensity = 0
-		matdata.diffuse_color = [mat.diffCol[2]/255,  mat.diffCol[1]/255,  mat.diffCol[0]/255, 1]
-		matdata.specular_color = [mat.specCol[2]/255, mat.specCol[1]/255, mat.specCol[0]/255]
 		matdata["SFRenderMode"] = mat.texMain.texRenderMode
-		matdata["SFFlags"] = mat.texMain.flag"""
+		matdata["SFFlags"] = mat.texMain.flag
 		matdata.blend_method = 'CLIP'
 		matdata.use_nodes = True
-		"""mtex = matdata.texture_slots.add()
-		mtex.texture = tex
-		mtex.texture_coords = 'UV'
-		mtex.use_map_color_diffuse = True
-		mtex.use_map_alpha = True
-		mtex.alpha_factor = mat.texMain.texAlpha
-		mtex.uv_layer = model.meshbuffers[t].material.texMain.texName#"Material "+str(t+1)"""
 		materials.append(matdata)	
 	
 	correct_vertex_pos = [[0, 0, 0] for i in range(max_v+1)]
