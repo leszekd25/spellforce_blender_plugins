@@ -3,7 +3,7 @@ all blender plugins i came up with regarding import/export of 3D stuff from spel
 
 all of those should work with blender 2.78, probably some earlier versions too
 
-**new:** there's also a set of plugins for 2.8, they differ in behavior, so read the readme file there
+**new:** there's also a set of plugins for 2.8, they are much better than the plugins below, so i recommend using those; read the readme file in the 2.8 directory above
 
 **everything below only applies to plugins in this directory, not to the 2.8 plugins**
 
