@@ -62,7 +62,7 @@ requirements:
 
 -all requirements for exporting static models also apply here
 
-usage: File -> Export... (only specify .msb file
+usage: File -> Export... (only specify .msb file)
 
 **note**: 4 files will be generated upon using this plugin: name.msb, name.bor, name.bsi and name_SKIN.msb
 
@@ -74,6 +74,24 @@ name.bsi goes to skinning/b20 folder
 
 name_SKIN.msb goes to skinning/b20 folder, and you must REMOVE the _SKIN part of the filename
 
-# animation support
+# import_animation_bob.py
 
-not here for now : ( you probably still need to use blender 2.78/2.79 for that
+selecting a skeleton in 3D view allows you to open animation file that matches the skeleton
+
+requirements:
+
+-selected skeleton has the same number of bones as the chosen animation file
+
+usage: File -> Import...
+
+# export_animation_bob.py
+
+if your skeleton has any animation data (position/rotation keyframes), you should be able to export that data as a spellforce-compatible .bob animation file
+
+requirements:
+
+-selected object is a skeleton and it has animation keyframes
+
+usage: File -> Export...
+
+**note**: .bob animation files go to animation folder in spellforce directory
