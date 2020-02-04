@@ -82,6 +82,7 @@ def ContainsVert(list, vert):
 			return v
 	return None		
 
+# reduces bone count to c, discarding least important bones and padding with 0s when needed
 def reduce_bone_count(bi, bw, c):
 	while(len(bi)>c):
 		i = 0
@@ -96,6 +97,7 @@ def reduce_bone_count(bi, bw, c):
 		bi.append(0)
 		bw.append(0)
 
+# probably could use the Vector class for that...
 def normalize(bw):
 	s = 0
 	for b in bw:
@@ -103,7 +105,8 @@ def normalize(bw):
 	for i in range(len(bw)):
 		bw[i] /= s
 		bw[i] = int(bw[i]*255)
-	
+
+# not particularly fast, remaps bone indices to fit the required bone count
 def recalculate_bone_indices(bi, bw, bsi_part):
 	for i in range(len(bi)):
 		if(bw[i] != 0):
@@ -179,7 +182,7 @@ def SaveMSBSkinned(context, filepath):
 			text_data.append("\t\t\t[V"+str(j)+"]\n")
 			text_data.append("\t\t\t{\n")
 			text_data.append("\t\t\t\tI = "+str(v[0])+"\n")
-			text_data.append("\t\t\t\tP = 0.000000, 0.000000, 0.000000\n")
+			text_data.append("\t\t\t\tP = 0.000000, 0.000000, 0.000000\n")	 # <- ???
 			text_data.append("\t\t\t\tW = {:f}\n".format(v[1]))
 			text_data.append("\t\t\t}\n")
 			text_data.append("\n")
@@ -202,7 +205,7 @@ def SaveMSBSkinned(context, filepath):
 	triangles_per_material = [[] for i in range(modelnum)]
 	for i, p in enumerate(mesh.polygons):
 		# tpm[material_index] = [[index[v0], index[v1], index[v2]], [...], ...], v0, v1, v2 directly from blender mesh
-		triangles_per_material[p.material_index].append([mesh.loops[i*3+0].vertex_index, mesh.loops[i*3+1].vertex_index, mesh.loops[i*3+2].vertex_index, i*3+0, i*3+1, i*3+2])
+		triangles_per_material[p.material_index].append([mesh.loops[i*3+0].vertex_index, mesh.loops[i*3+2].vertex_index, mesh.loops[i*3+1].vertex_index, i*3+0, i*3+2, i*3+1])
 	#print(triangles_per_material)
 	uv_layer = mesh.uv_layers[mesh.name]
 	unique_verts_per_material = [[] for i in range(modelnum)]  # unique vert: [vertex index, unique uv]
@@ -218,8 +221,8 @@ def SaveMSBSkinned(context, filepath):
 				else:
 					found_v[2].append(3*j+k)
 	#print(unique_verts_per_material)
-    
-    # adjust material count to exclude empty meshbuffers
+	
+	# adjust material count to exclude empty meshbuffers
 	mat_offset = 0
 	for i in range(modelnum):
 		if((len(unique_verts_per_material[i-mat_offset]) == 0) or (len(triangles_per_material[i-mat_offset]) == 0)):
@@ -270,35 +273,6 @@ def SaveMSBSkinned(context, filepath):
 				ind_array[ix] = k
 		
 		
-		# calculate positions and normals
-		vertex_positions = []
-		for v in unique_verts_per_material[i]:
-			vertex_positions.append(mesh.vertices[v[0]].co)	
-			
-		normals_per_triangle = [[] for j in range(len(triangles_per_material[i]))]
-		normals_per_vertex = [[0, 0, 0] for j in range(len(unique_verts_per_material[i]))]
-		for k in range(len(ind_array)//3):
-			v1 = vertex_positions[ind_array[3*k+0]]
-			v2 = vertex_positions[ind_array[3*k+1]]
-			v3 = vertex_positions[ind_array[3*k+2]]
-			
-			U = [v2[0]-v1[0], v2[1]-v1[1], v2[2]-v1[2]]
-			V = [v3[0]-v1[0], v3[1]-v1[1], v3[2]-v1[2]]
-			nm = [U[1]*V[2] - U[2]*V[1], U[2]*V[0] - U[0]*V[2], U[0]*V[1] - U[1]*V[0]]
-			nm_l = (nm[0]*nm[0] + nm[1]*nm[1] + nm[2]*nm[2])**0.5
-			nm2 = [nm[0]/nm_l, nm[1]/nm_l, nm[2]/nm_l]
-			normals_per_triangle[k] = nm2
-			
-			nmv1 = normals_per_vertex[ind_array[3*k+0]]
-			nmv1 = [nmv1[0]+nm2[0], nmv1[1]+nm2[1], nmv1[2]+nm2[2]]
-			normals_per_vertex[ind_array[3*k+0]] = nmv1
-			nmv2 = normals_per_vertex[ind_array[3*k+1]]
-			nmv2 = [nmv2[0]+nm2[0], nmv2[1]+nm2[1], nmv2[2]+nm2[2]]
-			normals_per_vertex[ind_array[3*k+1]] = nmv2
-			nmv3 = normals_per_vertex[ind_array[3*k+2]]
-			nmv3 = [nmv3[0]+nm2[0], nmv3[1]+nm2[1], nmv3[2]+nm2[2]]
-			normals_per_vertex[ind_array[3*k+2]] = nmv3
-		
 		for v in unique_verts_per_material[i]:
 			pos = mesh.vertices[v[0]].co
 			normal = mesh.vertices[v[0]].normal
@@ -342,7 +316,6 @@ def SaveMSBSkinned(context, filepath):
 		msbfile.write(pack("4B", material.specCol[0], material.specCol[1], material.specCol[2], material.specCol[3]))
 		msbfile.write(pack("6f", bbox_per_model[i][0], bbox_per_model[i][1], bbox_per_model[i][2], bbox_per_model[i][3], bbox_per_model[i][4], bbox_per_model[i][5]))
 		msbfile.write(pack("2f", 1.0, 0.0))
-	#write footer
 	
 	msbfile.write(pack("6f", bbox_total[0],bbox_total[1],bbox_total[2],bbox_total[3],bbox_total[4],bbox_total[5]))
 	msbfile.close()
@@ -352,8 +325,8 @@ def SaveMSBSkinned(context, filepath):
 	
 	# generate list of bones per vertex
 	bones_per_vertex = [[] for i in range(len(mesh.vertices))]
-	for i, g in enumerate(vlist):   # i = bone index
-		for v in g:  # v = [vertex id, bone weight]
+	for i, g in enumerate(vlist):	# i = bone index
+		for v in g:	 # v = [vertex id, bone weight]
 			bones_per_vertex[v[0]].append([i, v[1]])  # bones_per_vertex[v_id] = [[bone0, weight0], [bone1, weight1], ...]
 	
 	# find all bones used per material
@@ -372,11 +345,12 @@ def SaveMSBSkinned(context, filepath):
 	# 3. select all remaining triangles which only use marked bones
 	# 4. generate new meshbuffer for each such set of triangles
 	# 5. repeat until no more triangles
-	# not a perfect algorithm, but it will get the work done
+	# not a perfect algorithm, but it will get the work done, though i wonder how would it look on aryn skin for example
+	# SpellForce does this much better, gotta investigate
 	bsi = []
 	batch_count = 0
 	skin_packed_triangles_per_batch = []  # [material index, [triangles]]
-	skin_packed_vertices_per_batch = []   # [vertices]                     vertices contain bone info! bone info per vertex found in bones_per_vertex
+	skin_packed_vertices_per_batch = []	  # [vertices]					   vertices contain bone info! bone info per vertex found in bones_per_vertex
 	skin_packed_materials_per_batch = []
 	
 	for i, bpm in enumerate(bones_per_material):   # i - material index
@@ -391,8 +365,6 @@ def SaveMSBSkinned(context, filepath):
 				bone_ws.append(b[1])
 			reduce_bone_count(bone_ind, bone_ws, 3)
 			normalize(bone_ws)
-			#print("VERTEX", v[4], "BONES", bone_ind, "WEIGHTS", bone_ws)
-			# recalculate_bone_indices(bone_ind, bsi_part)     <- THIS GOES LATER
 			v[2] = bone_ind
 			v.append(bone_ws)
 			
@@ -424,7 +396,7 @@ def SaveMSBSkinned(context, filepath):
 			# ugh
 			# 0. generate data required for algorithm to work
 			print("SPLITTING REQUIRED")
-			triangles_batch_index = [-1 for i in range(len(packed_triangles_per_material[i]))]  # -1 - unselected yet, x - selected in batch x
+			triangles_batch_index = [-1 for i in range(len(packed_triangles_per_material[i]))]	# -1 - unselected yet, x - selected in batch x
 			triangles_selected_count = 0
 			current_batch = 0
 			bones_per_batch = []
@@ -450,7 +422,6 @@ def SaveMSBSkinned(context, filepath):
 					current_triangle_bones = set()
 					for k in range(3):
 						v = packed_vertices_per_material[i][t[k]]
-						#print(v)
 						for l in range(3):
 							if v[5][l] != 0:
 								current_triangle_bones.add(v[2][l])
@@ -472,7 +443,7 @@ def SaveMSBSkinned(context, filepath):
 					bsi_part.append(b)
 				print("BSI PART", bsi_part)
 					
-				vind_used = set()      # indices in packed_vertices_per_material[i] used in this batch
+				vind_used = set()	   # indices in packed_vertices_per_material[i] used in this batch
 				for k, p in enumerate(triangles_batch_index):
 					if p == j:
 						t = packed_triangles_per_material[i][k]
@@ -481,50 +452,29 @@ def SaveMSBSkinned(context, filepath):
 				vind_used = list(vind_used)
 				vind_used.sort()
 				
-				vind_used_inverted = {}    # if vind_used[X] = I, then vind_used_inverted[I] = X
+				vind_used_inverted = {}	   # if vind_used[X] = I, then vind_used_inverted[I] = X
 				for k, p in enumerate(vind_used):
 					vind_used_inverted[p] = k
-				#print(vind_used)
-				#print(vind_used_inverted)
 				
 				skin_packed_vertices_per_batch.append([])
 				for k, v in enumerate(packed_vertices_per_material[i]):
-					#print("VERTEX", k, v)
 					if k in vind_used_inverted:
 						v2 = [[v[0][0], v[0][1], v[0][2]], [v[1][0], v[1][1], v[1][2]], [v[2][0], v[2][1], v[2][2]], [v[3][0], v[3][1]], v[4], [v[5][0], v[5][1], v[5][2]]]
-						#print("VINDEX", k, "VERTEX", v2)
 						recalculate_bone_indices(v2[2], v2[5], bsi_part)
 						skin_packed_vertices_per_batch[-1].append(v2)
 				
 				skin_packed_triangles_per_batch.append([i, []])
-				#print("TEST TRIANGLES BATCH INDEX MATCH", j)
-				#print(triangles_batch_index)
 				for k, p in enumerate(triangles_batch_index):
 					if p == j:
 						t = packed_triangles_per_material[i][k]
 						t2 = [vind_used_inverted[t[0]], vind_used_inverted[t[1]], vind_used_inverted[t[2]]]
-						#print("TRIANGLE", k, t, t2)
 						skin_packed_triangles_per_batch[-1][1].append(t2)
 				
 				skin_packed_materials_per_batch.append(materials[i])
 				
 				bsi.append(bsi_part)
 				batch_count += 1
-				"""for v in packed_vertices_per_material[i]:
-					print(v[2])
-					recalculate_bone_indices(v[2], v[5], bsi_part)
-					skin_packed_vertices_per_batch[-1].append(v)
-					
-				skin_packed_triangles_per_batch.append([i, []])
-				for t in packed_triangles_per_material[i]:
-					skin_packed_triangles_per_batch[-1][1].append(t)
-					
-				skin_packed_materials_per_batch.append(materials[i])
-				
-				bsi.append(bsi_part)
-				batch_count += 1"""
 	
-	#print(skin_packed_triangles_per_batch)
 	# generate BSI file
 	filepath3 = filepath.replace(".msb", ".bsi")
 	bsifile = open(filepath3, 'wb',)

@@ -27,12 +27,6 @@ from struct import unpack
 import os.path
 
 class SFVertex:
-	def __init__(self):
-		self.pos=[0, 0, 0]
-		self.normal = [0, 0, 0]
-		self.col = [0, 0, 0, 0]
-		self.uv = [0, 0]
-		self.ind = 0
 	def __init__(self, data):
 		self.pos = [data[0], data[1], data[2]]
 		self.normal = [data[3], data[4], data[5]]
@@ -41,10 +35,6 @@ class SFVertex:
 		self.ind = data[12]
 
 class SFTriangle:
-	def __init__(self):
-		self.indices = [0, 0, 0, 0]
-		self.material = 0
-		self.group = 0
 	def __init__(self, data, offset, mat):
 		self.indices = [data[0]+offset, data[1]+offset, data[2]+offset, 0]
 		self.material = mat
@@ -61,18 +51,7 @@ class SFMesh:
 		self.meshbuffers = []
 	
 class SFMap:
-	def __init__(self):
-		self.texID = -1		  #32 bit
-		self.unknown1 = 0	  #8 bit
-		self.texUVMode = 0	  #8 bit
-		self.unused = 0		  #16 bit
-		self.texRenderMode = 0#8 bit
-		self.texAlpha = 1	  #8 bit
-		self.flag = 7		  #8 bit
-		self.depthbias = 0	  #8 bit
-		self.tiling = 1.0	#float
-		self.texName = ""	  #64 char string
-	def set(self, table):
+	def __init__(self, table):
 		print(table)
 		self.texID = table[0]	  #always -1?
 		self.unknown1 = table[1]  #idk
@@ -92,16 +71,15 @@ class SFMap:
 		
 class SFMaterial:
 	def __init__(self):
-		self.texMain = SFMap()
-		self.texSecondary = SFMap()
+		self.texMain = None
+		self.texSecondary = None
 		self.diffCol = []
 		self.emitCol = []
 		self.specCol = []
 
 
 def LoadMSBStatic(context, filepath):
-	print(filepath)
-	
+	# open file and load in mesh data
 	msbfile = open(filepath,'rb')
 			
 	model = SFMesh()
@@ -111,68 +89,60 @@ def LoadMSBStatic(context, filepath):
 	
 	total_v = 0
 	max_v = 0
-	total_t = 0
 	
+	skipped_models = 0
 	for t in range(modelnum):
 		model.meshbuffers.append(SFMeshBuffer())
+		
 		indata2 = unpack("2I", msbfile.read(8))
-		print(t, indata2[0], indata2[1])
+		
 		for i in range(indata2[0]):
 			model.meshbuffers[t].vertices.append(SFVertex(unpack("6f4B2f2H", msbfile.read(40))))
-			max_v = max(model.meshbuffers[t].vertices[i].ind, max_v)
+			max_v = max(max_v, model.meshbuffers[t].vertices[-1].ind)
+			
 		for i in range(indata2[1]):
 			model.meshbuffers[t].triangles.append(SFTriangle(unpack("4H", msbfile.read(8)), total_v, t))
+			
+		msbfile.read(2)
+		
 		mat = SFMaterial()
-		unpack("1H", msbfile.read(2))
-		mat.texMain.set(unpack("1i2B1H4B1f64s", msbfile.read(80)))
-		mat.texSecondary.set(unpack("1i2B1H4B1f64s", msbfile.read(80)))
+		mat.texMain = SFMap(unpack("1i2B1H4B1f64s", msbfile.read(80)))
+		mat.texSecondary = SFMap(unpack("1i2B1H4B1f64s", msbfile.read(80)))
 		mat.diffCol = list(unpack("4B", msbfile.read(4)))
 		mat.emitCol = list(unpack("4B", msbfile.read(4)))
 		mat.specCol = list(unpack("4B", msbfile.read(4)))
-		#divide colors by 255
 		model.meshbuffers[t].material = mat
+		
 		#not important data
-		indata6 = unpack("8f", msbfile.read(32))
-		indata7 = []
-		if t == modelnum-1:
-			indata7 = unpack("6f", msbfile.read(24))
-		else:
-			indata7 = unpack("2B", msbfile.read(2))
+		msbfile.read(34)
+		
 		total_v += len(model.meshbuffers[t].vertices)
-		total_t += len(model.meshbuffers[t].triangles)
 		#FIX HERE: if a model contains garbage (0 vertices, 0 faces), blender fails to load whole mesh
 		#fix for equipment_weapon_spear01
 		if indata2[0] == 0 and indata2[1] == 0:
 			del model.meshbuffers[-1]
 			modelnum -= 1
+			skipped_models += 1
 	
 	msbfile.close()
 	
-	#create materials
-	tex = None
-	texind = 0
-	texnames = []
-	textures = []
+	#create materials from mesh material data
+	img_dict = {}
 	materials = []
-	tex_per_material = []
+	img_per_material = []
+	
 	for t in range(modelnum):
-		tex = None
+		image = None
 		texname = model.meshbuffers[t].material.texMain.texName
-		if not(texname in texnames):
-			texind = len(texnames)
-			texnames.append(texname)
-			tex = bpy.data.textures.new(name = texname, type = 'IMAGE')
-			image = None
+		if not(texname in img_dict):
 			imagepath=os.path.split(filepath)[0] + "\\" + texname + ".dds"
 			image = bpy.data.images.load(imagepath)
-			image.name = texname
 			if image is not None:
-				tex.image = image
-			textures.append(tex)
+				image.name = texname
+			img_dict[texname] = image
 		else:
-			texind = texnames.index(texname)
-			tex = textures[texind]
-		tex_per_material.append(tex)
+			image = img_dict[texname]
+		img_per_material.append(image)
 		
 		mat = model.meshbuffers[t].material
 		materialname = "Material "+str(t+1)
@@ -183,44 +153,42 @@ def LoadMSBStatic(context, filepath):
 		matdata.use_nodes = True
 		materials.append(matdata)	
 	
+	# pre-process file data for mesh generation
+	for m in model.meshbuffers:
+		print("MESHBUFFER")
+		for v in m.vertices:
+			print(v.pos, v.ind)
+		for t in m.triangles:
+			print(t.indices)
+			
 	correct_vertex_pos = [[0, 0, 0] for i in range(max_v+1)]
-	correct_vertex_normal = [[0, 1, 0] for i in range(max_v+1)]
 	
 	for m in model.meshbuffers:
 		for v in m.vertices:
 			correct_vertex_pos[v.ind] = v.pos
-			correct_vertex_normal[v.ind] = v.normal
 	
 	vertices = []
 	for p in correct_vertex_pos:
-		vertices.append(p[0])
-		vertices.append(p[1])
-		vertices.append(p[2])
-	normals = []
-	for n in correct_vertex_normal:
-		normals.append(n[0])
-		normals.append(n[1])
-		normals.append(n[2])
+		vertices.extend(p)
+		
 	vertex_indices = []
 	uvs = []
 	material_indices = []
 	total_v = 0
+	
 	for m in model.meshbuffers:
 		for t in m.triangles:
-			vertex_indices.append(m.vertices[t.indices[0]-total_v].ind)
-			vertex_indices.append(m.vertices[t.indices[1]-total_v].ind)
-			vertex_indices.append(m.vertices[t.indices[2]-total_v].ind)
-			uvs.append(m.vertices[t.indices[0]-total_v].uv[0])
-			uvs.append(m.vertices[t.indices[0]-total_v].uv[1])
-			uvs.append(m.vertices[t.indices[1]-total_v].uv[0])
-			uvs.append(m.vertices[t.indices[1]-total_v].uv[1])
-			uvs.append(m.vertices[t.indices[2]-total_v].uv[0])
-			uvs.append(m.vertices[t.indices[2]-total_v].uv[1])
+			for i in range(3):
+				vertex_indices.append(m.vertices[t.indices[i]-total_v].ind)
+				uvs.extend(m.vertices[t.indices[i]-total_v].uv)
 			material_indices.append(t.material)
 		total_v += len(m.vertices)
 	loop_start = [3*i for i in range(len(vertex_indices)//3)]
 	loop_total = [3 for i in range(len(vertex_indices)//3)]
-	
+
+	print("TOTAL")
+	print(vertices)
+	print(vertex_indices)
 
 	# generate geometry and vertex data in blender
 	objName = (os.path.split(filepath)[1].replace(".msb",""))
@@ -231,7 +199,6 @@ def LoadMSBStatic(context, filepath):
 	
 	me_ob.vertices.add(len(vertices)//3)
 	me_ob.vertices.foreach_set("co", vertices)
-	me_ob.vertices.foreach_set("normal", normals)
 	
 	me_ob.loops.add(len(vertex_indices))
 	me_ob.loops.foreach_set("vertex_index", vertex_indices)
@@ -270,7 +237,7 @@ def LoadMSBStatic(context, filepath):
 		# set node parameters
 		mat = model.meshbuffers[i].material
 		uvmap_node.uv_map = objName
-		imtex_node.image = tex_per_material[i].image
+		imtex_node.image = img_per_material[i]
 		diffuse_color = [mat.diffCol[2]/255,  mat.diffCol[1]/255,  mat.diffCol[0]/255, 1]
 		diffuse_node.outputs[0].default_value = diffuse_color
 		specular_color = [mat.specCol[2]/255, mat.specCol[1]/255, mat.specCol[0]/255, 1]
@@ -283,7 +250,7 @@ def LoadMSBStatic(context, filepath):
 		links.new(dbsdf_node.outputs['BSDF'], mixsh_node.inputs[2])
 		links.new(mixsh_node.outputs['Shader'], output_node.inputs['Surface'])
 		
-	
+	# final set up, all is ready
 	me_ob.update()
 	
 	#create object which uses the geometry

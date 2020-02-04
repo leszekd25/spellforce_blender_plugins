@@ -38,23 +38,6 @@ class SFMap:
 		self.depthbias = 0	  #8 bit
 		self.tiling = 1.0	#float
 		self.texName = ""	  #64 char string
-	def set(self, table):
-		print(table)
-		self.texID = table[0]	  #always -1?
-		self.unknown1 = table[1]  #idk
-		self.texUVMode = table[2] #probably always 0
-		self.unused = table[3]	  #anything goes here
-		self.texRenderMode = table[4]	#depends, usually 0
-		self.texAlpha = table[5]/255
-		self.flag = table[6]	  #should be 7 except noted otherwise
-		self.depthbias = table[7] #always 0?
-		self.tiling = table[8]	  #always 1.0?
-		ntable = []
-		for c in table[9]:
-			if c == 0:
-				break
-			ntable.append(c)
-		self.texName = str(bytearray(ntable), "utf-8")
 	def get(self):
 		charray = []
 		for i in range(64):
@@ -94,7 +77,7 @@ def SaveMSBStatic(context, filepath):
 	triangles_per_material = [[] for i in range(modelnum)]
 	for i, p in enumerate(mesh.polygons):
 		# tpm[material_index] = [[index[v0], index[v1], index[v2]], [...], ...], v0, v1, v2 directly from blender mesh
-		triangles_per_material[p.material_index].append([mesh.loops[i*3+0].vertex_index, mesh.loops[i*3+1].vertex_index, mesh.loops[i*3+2].vertex_index, i*3+0, i*3+1, i*3+2])
+		triangles_per_material[p.material_index].append([mesh.loops[i*3+0].vertex_index, mesh.loops[i*3+2].vertex_index, mesh.loops[i*3+1].vertex_index, i*3+0, i*3+2, i*3+1])
 
 	uv_layer = mesh.uv_layers[mesh.name]
 	unique_verts_per_material = [[] for i in range(modelnum)]  # unique vert: [vertex index respective to triangle, unique uv, table of indices using this vertex]
@@ -155,38 +138,9 @@ def SaveMSBStatic(context, filepath):
 			for ix in v[2]:
 				ind_array[ix] = k
 		
-		# calculate positions and normals
-		vertex_positions = []
-		for v in unique_verts_per_material[i]:
-			vertex_positions.append(mesh.vertices[v[0]].co)
-		
-		normals_per_triangle = [[] for j in range(len(triangles_per_material[i]))]
-		normals_per_vertex = [[0, 0, 0] for j in range(len(unique_verts_per_material[i]))]
-		for k in range(len(ind_array)//3):
-			v1 = vertex_positions[ind_array[3*k+0]]
-			v2 = vertex_positions[ind_array[3*k+1]]
-			v3 = vertex_positions[ind_array[3*k+2]]
-			
-			U = [v2[0]-v1[0], v2[1]-v1[1], v2[2]-v1[2]]
-			V = [v3[0]-v1[0], v3[1]-v1[1], v3[2]-v1[2]]
-			nm = [U[1]*V[2] - U[2]*V[1], U[2]*V[0] - U[0]*V[2], U[0]*V[1] - U[1]*V[0]]
-			nm_l = (nm[0]*nm[0] + nm[1]*nm[1] + nm[2]*nm[2])**0.5
-			nm2 = [nm[0]/nm_l, nm[1]/nm_l, nm[2]/nm_l]
-			normals_per_triangle[k] = nm2
-			
-			nmv1 = normals_per_vertex[ind_array[3*k+0]]
-			nmv1 = [nmv1[0]+nm2[0], nmv1[1]+nm2[1], nmv1[2]+nm2[2]]
-			normals_per_vertex[ind_array[3*k+0]] = nmv1
-			nmv2 = normals_per_vertex[ind_array[3*k+1]]
-			nmv2 = [nmv2[0]+nm2[0], nmv2[1]+nm2[1], nmv2[2]+nm2[2]]
-			normals_per_vertex[ind_array[3*k+1]] = nmv2
-			nmv3 = normals_per_vertex[ind_array[3*k+2]]
-			nmv3 = [nmv3[0]+nm2[0], nmv3[1]+nm2[1], nmv3[2]+nm2[2]]
-			normals_per_vertex[ind_array[3*k+2]] = nmv3
-		
 		for k, v in enumerate(unique_verts_per_material[i]):
-			pos = vertex_positions[k]
-			normal = normals_per_vertex[k]
+			pos = mesh.vertices[v[0]].co
+			normal = mesh.vertices[v[0]].normal
 			col = [255, 255, 255, 255]
 			uv = v[1]
 			ind = v[0]
