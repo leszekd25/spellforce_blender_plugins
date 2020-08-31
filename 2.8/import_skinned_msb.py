@@ -69,7 +69,7 @@ class SFMeshBuffer:
 		self.vertices = []
 		self.triangles = []
 		self.material = None
-	def merge(self, mb, v_offset):  # only works if they're one after another
+	def merge(self, mb, v_offset):	# only works if they're one after another
 		print("MERGING")
 		ret = SFMeshBuffer()
 		for v in self.vertices:
@@ -243,7 +243,7 @@ class SF_Bone:
 	def mix_channels(self): #todo: do this
 		return
 	def set_animation(self, anim, w, too, toa, tob, av):
-		self.ba_channel[0]=anim  #todo: proper channel check
+		self.ba_channel[0]=anim	 #todo: proper channel check
 		anim.set_start_time(too)
 		anim.sv.translation = anim.interpolate_translation(toa)
 		anim.sv.orientation = anim.interpolate_orientation(toa)
@@ -300,7 +300,7 @@ def LoadMSBSkinned(context, filepath):
 			model.meshbuffers[t].vertices.append(SFVertex(unpack("6f4B2f2H", msbfile.read(40))))
 			max_v = max(model.meshbuffers[t].vertices[i].ind, max_v)
 		for i in range(indata2[1]):
-			model.meshbuffers[t].triangles.append(SFTriangle(unpack("4H", msbfile.read(8)), total_v))
+			model.meshbuffers[t].triangles.append(SFTriangle(unpack("3HBB", msbfile.read(8)), total_v))
 		mat = SFMaterial()
 		unpack("1H", msbfile.read(2))
 		mat.texMain.set(unpack("1i2B1H4B1f64s", msbfile.read(80)))
@@ -395,7 +395,10 @@ def LoadMSBSkinned(context, filepath):
 			uvs.append(m.vertices[t.indices[1]-total_v].uv[1])
 			uvs.append(m.vertices[t.indices[2]-total_v].uv[0])
 			uvs.append(m.vertices[t.indices[2]-total_v].uv[1])
-			material_indices.append(t.material)
+			if(t.material >= len(materials)):
+				material_indices.append(0)
+			else:
+				material_indices.append(t.material)
 		total_v += len(m.vertices)
 	loop_start = [3*i for i in range(len(vertex_indices)//3)]
 	loop_total = [3 for i in range(len(vertex_indices)//3)]
@@ -473,7 +476,7 @@ def LoadMSBSkinned(context, filepath):
 	bone_count = 0;
 	bone_reference_matrices = []
 	bone_inverted_matrices = []
-	bone_parents = []   # int
+	bone_parents = []	# int
 	bone_names = []
 	
 	bone_pos = []  #vector
@@ -508,7 +511,7 @@ def LoadMSBSkinned(context, filepath):
 				bone_parents.append(int(data[2]))#b.parent = int(data[2])
 				borfile.readline()
 				borfile.readline()
-				data = borfile.readline().strip().split()   #not needed?
+				data = borfile.readline().strip().split()	#not needed?
 				data = borfile.readline().strip().split()
 				bone_pos.append(Vector((float(data[2].replace(",","")), float(data[3].replace(",","")), float(data[4].replace(",","")))))
 				data = borfile.readline().strip().split()

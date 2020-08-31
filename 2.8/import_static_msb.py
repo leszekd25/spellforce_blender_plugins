@@ -181,7 +181,10 @@ def LoadMSBStatic(context, filepath):
 			for i in range(3):
 				vertex_indices.append(m.vertices[t.indices[i]-total_v].ind)
 				uvs.extend(m.vertices[t.indices[i]-total_v].uv)
-			material_indices.append(t.material)
+			if(t.material >= len(materials)):
+				material_indices.append(0)
+			else:
+				material_indices.append(t.material)
 		total_v += len(m.vertices)
 	loop_start = [3*i for i in range(len(vertex_indices)//3)]
 	loop_total = [3 for i in range(len(vertex_indices)//3)]
