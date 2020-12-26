@@ -1,6 +1,6 @@
 bl_info = {
-	"name": "Import static SpellForce mesh (.msb)",
-	"description": "Import static SpellForce mesh (.msb)",
+	"name": "Import static SpellForce skin mesh (.msb)",
+	"description": "Import static SpellForce skin mesh (.msb)",
 	"author": "leszekd25",
 	"blender": (2, 80, 0),
 	"location": "Import/Export",
@@ -30,15 +30,15 @@ class SFVertex:
 	def __init__(self, data):
 		self.pos = [data[0], data[1], data[2]]
 		self.normal = [data[3], data[4], data[5]]
-		self.col = [data[6], data[7], data[8], data[9]]
+		self.bone_weight = [data[6], data[7], data[8], data[9]]
 		self.uv = [data[10], 1.0-data[11]]
-		self.ind = data[12]
+		self.bone_index = [data[12], data[13], data[14], data[15]]
 
 class SFTriangle:
-	def __init__(self, data):
+	def __init__(self, data, mat):
 		#self.indices = [data[0]+offset, data[1]+offset, data[2]+offset, 0]
 		self.indices = [data[0], data[1], data[2], 0]
-		self.material = data[3]
+		self.material = mat
 		self.group = 0
 
 class SFMeshBuffer:
@@ -79,7 +79,7 @@ class SFMaterial:
 		self.specCol = []
 
 
-def LoadMSBStatic(context, filepath):
+def LoadMSBStaticSkin(context, filepath):
 	# open file and load in mesh data
 	msbfile = open(filepath,'rb')
 			
@@ -98,11 +98,10 @@ def LoadMSBStatic(context, filepath):
 		indata2 = unpack("2I", msbfile.read(8))
 		
 		for i in range(indata2[0]):
-			model.meshbuffers[t].vertices.append(SFVertex(unpack("6f4B2f2H", msbfile.read(40))))
-			max_v = max(max_v, model.meshbuffers[t].vertices[-1].ind)
+			model.meshbuffers[t].vertices.append(SFVertex(unpack("6f4B2f4B", msbfile.read(40))))
 			
 		for i in range(indata2[1]):
-			model.meshbuffers[t].triangles.append(SFTriangle(unpack("4H", msbfile.read(8))))
+			model.meshbuffers[t].triangles.append(SFTriangle(unpack("4H", msbfile.read(8)), t))
 		
 		
 		msbfile.read(2)
@@ -155,15 +154,14 @@ def LoadMSBStatic(context, filepath):
 		matdata.use_nodes = True
 		materials.append(matdata)	
 	
-	polygons = [[[0, 0, 0], [[0, 0, 1], [0, 0, 1], [0, 0, 1]], [[0, 0], [0, 0], [0, 0]], 0] for i in range(total_f)]  # vertex ids, vertex normals, vertex uvs, material
-	vertex_map = [[0, 0, 0] for i in range(max_v + 1)]
+	polygons = [[[[0, 0, 0], [0, 0, 0], [0, 0, 0]], [[0, 0, 1], [0, 0, 1], [0, 0, 1]], [[0, 0], [0, 0], [0, 0]], 0] for i in range(total_f)]  # vertex ids, vertex normals, vertex uvs, material
 	
 	total_f = 0
 	for t in range(modelnum):
 		for f in range(len(model.meshbuffers[t].triangles)):
-			polygons[total_f+f][0][0] = model.meshbuffers[t].vertices[model.meshbuffers[t].triangles[f].indices[0]].ind
-			polygons[total_f+f][0][1] = model.meshbuffers[t].vertices[model.meshbuffers[t].triangles[f].indices[2]].ind
-			polygons[total_f+f][0][2] = model.meshbuffers[t].vertices[model.meshbuffers[t].triangles[f].indices[1]].ind
+			polygons[total_f+f][0][0] = model.meshbuffers[t].vertices[model.meshbuffers[t].triangles[f].indices[0]].pos
+			polygons[total_f+f][0][1] = model.meshbuffers[t].vertices[model.meshbuffers[t].triangles[f].indices[2]].pos
+			polygons[total_f+f][0][2] = model.meshbuffers[t].vertices[model.meshbuffers[t].triangles[f].indices[1]].pos
 			polygons[total_f+f][1][0] = model.meshbuffers[t].vertices[model.meshbuffers[t].triangles[f].indices[0]].normal
 			polygons[total_f+f][1][1] = model.meshbuffers[t].vertices[model.meshbuffers[t].triangles[f].indices[2]].normal
 			polygons[total_f+f][1][2] = model.meshbuffers[t].vertices[model.meshbuffers[t].triangles[f].indices[1]].normal
@@ -173,20 +171,17 @@ def LoadMSBStatic(context, filepath):
 			polygons[total_f+f][3] = model.meshbuffers[t].triangles[f].material
 		total_f += len(model.meshbuffers[t].triangles)
 	
-		for v in range(len(model.meshbuffers[t].vertices)):
-			vertex_map[model.meshbuffers[t].vertices[v].ind] = model.meshbuffers[t].vertices[v].pos
-	
-	
-	
 	
 	# pre-process part 2, generate buffers to feed directly to blender
 	vertices = []
-	for p in vertex_map:
-		vertices.extend(p)
+	for t in polygons:
+		vertices.extend(t[0][0])
+		vertices.extend(t[0][1])
+		vertices.extend(t[0][2])
 	
 	vertex_indices = []
-	for t in polygons:
-		vertex_indices.extend(t[0])
+	for k, t in enumerate(polygons):
+		vertex_indices.extend([k*3+0, k*3+1, k*3+2])
 	
 	loop_start = [3*i for i in range(len(vertex_indices)//3)]
 	loop_total = [3 for i in range(len(vertex_indices)//3)]
@@ -297,14 +292,14 @@ def LoadMSBStatic(context, filepath):
 	return 0
 
 
-class ImportStaticMSB(bpy.types.Operator, ImportHelper):
+class ImportStaticSkinMSB(bpy.types.Operator, ImportHelper):
 	"""Object Cursor Array"""
-	bl_idname = "import.msb_static"
-	bl_label = "Import SpellForce static mesh (.msb)"
+	bl_idname = "import.msb_static_skin"
+	bl_label = "Import SpellForce static skin mesh (.msb)"
 	bl_options = {'REGISTER', 'UNDO'}
 	
 	filepath: StringProperty(
-		name="Input mesh",
+		name="Input skin mesh",
 		subtype='FILE_PATH'
 		)
 
@@ -316,22 +311,22 @@ class ImportStaticMSB(bpy.types.Operator, ImportHelper):
 			)
 
 	def execute(self, context):
-		if LoadMSBStatic(context, self.filepath) == 0:
+		if LoadMSBStaticSkin(context, self.filepath) == 0:
 			return {'FINISHED'}
 		return {'CANCELLED'}
 
 
 
 def menu_func(self, context):
-	self.layout.operator(ImportStaticMSB.bl_idname, text="Import SpellForce static mesh (.msb)")
+	self.layout.operator(ImportStaticSkinMSB.bl_idname, text="Import SpellForce static skin mesh (.msb)")
 
 
 def register():
-	bpy.utils.register_class(ImportStaticMSB)
+	bpy.utils.register_class(ImportStaticSkinMSB)
 	bpy.types.TOPBAR_MT_file_import.append(menu_func)
 
 def unregister():
-	bpy.utils.unregister_class(ImportStaticMSB)
+	bpy.utils.unregister_class(ImportStaticSkinMSB)
 	bpy.types.TOPBAR_MT_file_import.remove(menu_func)
 
 

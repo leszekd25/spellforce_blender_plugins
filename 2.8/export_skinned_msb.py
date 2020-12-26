@@ -33,28 +33,11 @@ class SFMap:
 		self.texUVMode = 0	  #8 bit
 		self.unused = 0		  #16 bit
 		self.texRenderMode = 0#8 bit
-		self.texAlpha = 1	  #8 bit
+		self.texAlpha = 255	  #8 bit
 		self.flag = 7		  #8 bit
 		self.depthbias = 0	  #8 bit
 		self.tiling = 1.0	#float
 		self.texName = ""	  #64 char string
-	def set(self, table):
-		print(table)
-		self.texID = table[0]	  #always -1?
-		self.unknown1 = table[1]  #idk
-		self.texUVMode = table[2] #probably always 0
-		self.unused = table[3]	  #anything goes here
-		self.texRenderMode = table[4]	#depends, usually 0
-		self.texAlpha = table[5]/255
-		self.flag = table[6]	  #should be 7 except noted otherwise
-		self.depthbias = table[7] #always 0?
-		self.tiling = table[8]	  #always 1.0?
-		ntable = []
-		for c in table[9]:
-			if c == 0:
-				break
-			ntable.append(c)
-		self.texName = str(bytearray(ntable), "utf-8")
 	def get(self):
 		charray = []
 		for i in range(64):
@@ -75,12 +58,22 @@ class SFMaterial:
 		self.specCol = []
 		
 
-# returns reference to a vertex from list if there is a vertex thats the same as input vert, none otherwise
-def ContainsVert(list, vert):
-	for v in list:
-		if(v[0] == vert[0]) and (v[1][0] == vert[1][0]) and (v[1][1] == vert[1][1]):
-			return v
-	return None		
+def VertIndexOf(l, v):
+	for i, _v in enumerate(l):
+		if CompareVerts(v, _v):
+			return i
+	return -1
+	
+def CompareVerts(v1, v2):	  # [vert_id, vert_normal, vert_uv]
+	if (v1[0] != v2[0]):
+		return False
+	# instead of comparing vectors, compare distances (0.001 is 0.1 angular)
+	if(((v1[1][0]-v2[1][0])**2 + (v1[1][1] - v2[1][1])**2 + (v1[1][2] - v2[1][2])**2) ** 0.5) > 0.001:
+		return False
+	if (v1[2][0] != v2[2][0]) or (v1[2][1] != v2[2][1]):
+		return False
+	
+	return True
 
 # reduces bone count to c, discarding least important bones and padding with 0s when needed
 def reduce_bone_count(bi, bw, c):
@@ -109,8 +102,8 @@ def normalize(bw):
 # not particularly fast, remaps bone indices to fit the required bone count
 def recalculate_bone_indices(bi, bw, bsi_part):
 	for i in range(len(bi)):
-		if(bw[i] != 0):
-			bi[i] = bsi_part.index(bi[i])
+		bi[i] = (bsi_part.index(bi[i])) if (bw[i] != 0) else (0)
+	return bi
 
 def SaveMSBSkinned(context, filepath):
 	object = bpy.context.object
@@ -202,42 +195,99 @@ def SaveMSBSkinned(context, filepath):
 	msbfile = open(filepath.replace(".msb", "")+".msb",'wb')
 	modelnum = len(mesh.materials)
 	
-	triangles_per_material = [[] for i in range(modelnum)]
-	for i, p in enumerate(mesh.polygons):
-		# tpm[material_index] = [[index[v0], index[v1], index[v2]], [...], ...], v0, v1, v2 directly from blender mesh
-		triangles_per_material[p.material_index].append([mesh.loops[i*3+0].vertex_index, mesh.loops[i*3+2].vertex_index, mesh.loops[i*3+1].vertex_index, i*3+0, i*3+2, i*3+1])
-	#print(triangles_per_material)
-	uv_layer = mesh.uv_layers[mesh.name]
-	unique_verts_per_material = [[] for i in range(modelnum)]  # unique vert: [vertex index, unique uv]
-	for i, tpm in enumerate(triangles_per_material):
-		for j, t in enumerate(tpm):
-			for k in range(3):
-				#vert = [vertex index, uv for this vertex for this triangle, table of indices this vertex is referenced within this part of mesh]
-				vert = [t[k], uv_layer.data[t[k+3]].uv, []]
-				found_v = ContainsVert(unique_verts_per_material[i], vert)
-				if(found_v == None):
-					unique_verts_per_material[i].append(vert)
-					vert[2].append(3*j+k)
-				else:
-					found_v[2].append(3*j+k)
-	#print(unique_verts_per_material)
+	bpy.ops.object.mode_set(mode = 'OBJECT')
+	mesh.use_auto_smooth = True
+	mesh.calc_normals_split()
 	
-	# adjust material count to exclude empty meshbuffers
-	mat_offset = 0
-	for i in range(modelnum):
-		if((len(unique_verts_per_material[i-mat_offset]) == 0) or (len(triangles_per_material[i-mat_offset]) == 0)):
-			del unique_verts_per_material[i-mat_offset]
-			del triangles_per_material[i-mat_offset]
-			mat_offset += 1
-	modelnum = len(unique_verts_per_material)
-
-	# calculate bounding boxes for the parts of mesh
+	uv_layer = mesh.uv_layers[mesh.name]
+	uvs = []
+	for d in uv_layer.data:
+		uvs.append(d.uv)
+	
+	bpy.ops.object.mode_set(mode = 'EDIT')
+	# generate vertex map	(vertex ID -> vertex position)
+	vertex_map = []
+	for v in mesh.vertices:
+		vertex_map.append(v.co)
+		
+	# generate polygon table
+	polygons = []							 # vertex ids, vertex normals, vertex uvs, material
+	uv_layer = mesh.uv_layers[mesh.name]
+	for i in range(len(mesh.polygons)):
+		p = mesh.polygons[i]
+		t = []
+		
+		t.append([p.vertices[0], p.vertices[2], p.vertices[1]])
+		
+		t2 = []
+		if mesh.has_custom_normals:
+			for j in [0, 2, 1]:
+				t2.append(mesh.loops[i*3+j].normal)
+		else:
+			for j in [0, 2, 1]:
+				t2.append(mesh.vertices[t[0][j]].normal)
+		t.append(t2)
+		
+		t3 = []
+		for j in [0, 2, 1]:
+			t3.append(uvs[i*3+j])
+		t.append(t3)
+		
+		t.append(p.material_index)
+		#print("POLYGON", i, t)
+		
+		polygons.append(t)
+	
+	bpy.ops.object.mode_set(mode = 'EDIT')
+	
+	# remove unused materials
+	material_map = {}
+	for p in polygons:
+		material_map[p[3]] = 1
+	
+	for i in [j for j in range(modelnum)]:	   # not sure if this is needed, maybe `for i in range(modelnum)` would work as well
+		if not(i in material_map):
+			for p in polygons:
+				if(p[3] > i):
+					p[3] -= 1
+			modelnum -= 1
+	
+	# split polygons per material
+	# each polygon belongs to exactly one material
+	polygons_per_material = [[] for i in range(modelnum)]
+	for p in polygons:
+		polygons_per_material[p[3]].append(p)
+	
+	# generate vertex buffer for the file, and fix triangle buffer for the file
+	vertices_per_material = [[] for i in range(modelnum)]	  # vertex ids, vertex normals, vertex uvs
+		
+	for i, ppm in enumerate(polygons_per_material):	   
+		vpm = vertices_per_material[i]
+		for p in ppm:
+			for j in range(3):
+				v = [p[0][j], p[1][j], p[2][j]]
+				#print("VERTEX", v)
+				v_ind = VertIndexOf(vpm, v)
+				if(v_ind == -1):
+					vpm.append(v)
+					p[0][j] = len(vpm)-1
+				else:
+					p[0][j] = v_ind
+		
+	
+	# bounding box
 	bbox_per_model = [[10000, 10000, 10000, -10000, -10000, -10000] for i in range(modelnum)]
 	bbox_total = [10000, 10000, 10000, -10000, -10000, -10000]
 	
+	# store saved buffers for later use
+	packed_vertices_per_material = [[] for i in range(modelnum)]
+	packed_triangles_per_material = [[] for i in range(modelnum)]
+	materials = []
+	
+	# calculate bounding boxes
 	for i in range(modelnum):
-		for v in unique_verts_per_material[i]:
-			pos = mesh.vertices[v[0]].co
+		for v in vertices_per_material[i]:
+			pos = vertex_map[v[0]]
 			bbox_per_model[i][0] = min(bbox_per_model[i][0], pos[0])
 			bbox_per_model[i][1] = min(bbox_per_model[i][1], pos[1])
 			bbox_per_model[i][2] = min(bbox_per_model[i][2], pos[2])
@@ -253,48 +303,35 @@ def SaveMSBSkinned(context, filepath):
 		bbox_total[4] = max(bbox_total[4], bbox_per_model[i][4])
 		bbox_total[5] = max(bbox_total[5], bbox_per_model[i][5])
 		
-		
 	# write header
 	outdata = pack("BBHBB", 0, 2, modelnum, 0, 0)
 	msbfile.write(outdata)
 	
-	# data useful for BSI/skin calculation
-	packed_vertices_per_material = [[] for i in range(modelnum)]
-	packed_triangles_per_material = [[] for i in range(modelnum)]
-	materials = []
 	for i in range(modelnum):
-		# write header
-		outdata2 = pack("2b4H", 0, 2, len(unique_verts_per_material[i]), 0, len(triangles_per_material[i]), 0)
+		outdata2 = pack("2b4H", 0, 2, len(vertices_per_material[i]), 0, len(polygons_per_material[i]), 0)
 		msbfile.write(outdata2)
-			
-		ind_array = [0 for k in range(len(triangles_per_material[i])*3)]
-		for k, v in enumerate(unique_verts_per_material[i]):
-			for ix in v[2]:
-				ind_array[ix] = k
 		
-		
-		for v in unique_verts_per_material[i]:
-			pos = mesh.vertices[v[0]].co
-			normal = mesh.vertices[v[0]].normal
+		for k, v in enumerate(vertices_per_material[i]):
+			pos = vertex_map[v[0]]
+			normal = v[1]
 			col = [255, 255, 255, 255]
-			uv = v[1]
+			uv = v[2]
 			ind = v[0]
 			packed_vertices_per_material[i].append([pos, normal, col, uv, ind])
 			outdata3 = pack('6f4B2fI', pos[0], pos[1], pos[2], normal[0], normal[1], normal[2], col[0], col[1], col[2], col[3], uv[0], 1-uv[1], ind)
 			msbfile.write(outdata3)
-			
-			
-		for k in range(len(ind_array)//3):
-			packed_triangles_per_material[i].append([ind_array[3*k+0], ind_array[3*k+1], ind_array[3*k+2]])
-			outdata4 = pack("4H", ind_array[3*k+0], ind_array[3*k+2], ind_array[3*k+1], i)
+		
+		for k, f in enumerate(polygons_per_material[i]):
+			packed_triangles_per_material[i].append([f[0][0], f[0][1], f[0][2]])
+			outdata4 = pack("4H", f[0][0], f[0][1], f[0][2], f[3])
 			msbfile.write(outdata4)
 		
 		# handle materials
 		material = SFMaterial()
 		diffuse_color = mesh.materials[i].node_tree.nodes.get('Diffuse Color').outputs[0].default_value
-		material.diffCol = [int(diffuse_color[2]*255), int(diffuse_color[1]*255), int(diffuse_color[0]*255), 255]
+		material.diffCol = [int(diffuse_color[2]*255), int(diffuse_color[1]*255), int(diffuse_color[0]*255), 0]
 		specular_color = mesh.materials[i].node_tree.nodes.get('Specular Color').outputs[0].default_value
-		material.specCol = [int(specular_color[2]*255), int(specular_color[1]*255), int(specular_color[0]*255), 255]
+		material.specCol = [int(specular_color[2]*255), int(specular_color[1]*255), int(specular_color[0]*255), 0]
 		material.emitCol = [0, 0, 0, 0]
 		if mesh.materials[i].get('SFRenderMode') is not None:
 			material.texMain.texRenderMode = mesh.materials[i]["SFRenderMode"]
@@ -304,7 +341,6 @@ def SaveMSBSkinned(context, filepath):
 			material.texMain.flag = mesh.materials[i]["SFFlags"]
 		else:
 			material.texMain.flag = 7
-		material.texMain.texAlpha = 255
 		material.texMain.texName = mesh.materials[i].node_tree.nodes.get('Image Texture').image.name
 		materials.append(material)
 		# write to file
@@ -316,10 +352,10 @@ def SaveMSBSkinned(context, filepath):
 		msbfile.write(pack("4B", material.specCol[0], material.specCol[1], material.specCol[2], material.specCol[3]))
 		msbfile.write(pack("6f", bbox_per_model[i][0], bbox_per_model[i][1], bbox_per_model[i][2], bbox_per_model[i][3], bbox_per_model[i][4], bbox_per_model[i][5]))
 		msbfile.write(pack("2f", 1.0, 0.0))
+	#write footer
 	
 	msbfile.write(pack("6f", bbox_total[0],bbox_total[1],bbox_total[2],bbox_total[3],bbox_total[4],bbox_total[5]))
 	msbfile.close()
-	
 	
 	# SKIN+BSI GENERATION
 	
@@ -354,7 +390,6 @@ def SaveMSBSkinned(context, filepath):
 	skin_packed_materials_per_batch = []
 	
 	for i, bpm in enumerate(bones_per_material):   # i - material index
-		print("MATERIAL", i, "BONES", list(bpm))
 		# vertex preprocessing
 		for v in packed_vertices_per_material[i]:  # result: [pos, normal, bone_ind, uv, ind, bone_weight]
 			# calculate bones
@@ -372,16 +407,14 @@ def SaveMSBSkinned(context, filepath):
 		if(len(bones_per_material[i]) <= 20):
 			# dont split, just pass data from packed meshbuffers
 			# but first, final bone processing for BSI
-			print("SPLITTING NOT NEEDED")
 			bsi_part = []
 			for b in bpm:
 				bsi_part.append(b)
-			print("BSI PART", bsi_part)
 				
 			skin_packed_vertices_per_batch.append([])
 			for v in packed_vertices_per_material[i]:
-				v2 = [[v[0][0], v[0][1], v[0][2]], [v[1][0], v[1][1], v[1][2]], [v[2][0], v[2][1], v[2][2]], [v[3][0], v[3][1]], v[4], [v[5][0], v[5][1], v[5][2]]]
-				recalculate_bone_indices(v2[2], v2[5], bsi_part)
+				v2 = [[v[0][0], v[0][1], v[0][2]], [v[1][0], v[1][1], v[1][2]], [v[2][0], v[2][1], v[2][2]], [v[3][0], v[3][1]], v[4], [v[5][0], v[5][1], v[5][2]]] # copy vertex
+				v2[2] = recalculate_bone_indices(v2[2], v2[5], bsi_part)
 				skin_packed_vertices_per_batch[-1].append(v2)
 				
 			skin_packed_triangles_per_batch.append([i, []])
@@ -395,13 +428,11 @@ def SaveMSBSkinned(context, filepath):
 		else:
 			# ugh
 			# 0. generate data required for algorithm to work
-			print("SPLITTING REQUIRED")
 			triangles_batch_index = [-1 for i in range(len(packed_triangles_per_material[i]))]	# -1 - unselected yet, x - selected in batch x
 			triangles_selected_count = 0
 			current_batch = 0
 			bones_per_batch = []
 			while True:
-				print("BATCH", current_batch)
 				first_triangle = -1
 				# 1. select first unselected triangle
 				for j in range(len(triangles_batch_index)):
@@ -410,7 +441,6 @@ def SaveMSBSkinned(context, filepath):
 						break
 				# if triangle not found, stop here
 				if(first_triangle == -1):
-					print("NO MORE DATA, CANCELLING")
 					break
 				# 2. go down the list of triangles, selecting them and remembering all bones used by the triangle until their count reaches 20
 				# only select triangles if its possible (so the bone count <= 20 at all times)
@@ -432,16 +462,13 @@ def SaveMSBSkinned(context, filepath):
 				bones_per_batch.append([])
 				for b in batch_bones:
 					bones_per_batch[-1].append(b)
-				print("BONES THIS BATCH", bones_per_batch[-1])
 				current_batch += 1
 			
 			# we have now triangle batches - all thats left is to generate BSI and meshbuffers
 			for j in range(current_batch):
-				print("PROCESSING BATCHES, BATCH", j)
 				bsi_part = []
 				for b in bones_per_batch[j]:
 					bsi_part.append(b)
-				print("BSI PART", bsi_part)
 					
 				vind_used = set()	   # indices in packed_vertices_per_material[i] used in this batch
 				for k, p in enumerate(triangles_batch_index):
@@ -459,8 +486,8 @@ def SaveMSBSkinned(context, filepath):
 				skin_packed_vertices_per_batch.append([])
 				for k, v in enumerate(packed_vertices_per_material[i]):
 					if k in vind_used_inverted:
-						v2 = [[v[0][0], v[0][1], v[0][2]], [v[1][0], v[1][1], v[1][2]], [v[2][0], v[2][1], v[2][2]], [v[3][0], v[3][1]], v[4], [v[5][0], v[5][1], v[5][2]]]
-						recalculate_bone_indices(v2[2], v2[5], bsi_part)
+						v2 = [[v[0][0], v[0][1], v[0][2]], [v[1][0], v[1][1], v[1][2]], [v[2][0], v[2][1], v[2][2]], [v[3][0], v[3][1]], v[4], [v[5][0], v[5][1], v[5][2]]] # copy vertex
+						v2[2] = recalculate_bone_indices(v2[2], v2[5], bsi_part)
 						skin_packed_vertices_per_batch[-1].append(v2)
 				
 				skin_packed_triangles_per_batch.append([i, []])
@@ -492,7 +519,7 @@ def SaveMSBSkinned(context, filepath):
 	# calculate bounding boxes for the parts of skin
 	bbox_per_model = [[10000, 10000, 10000, -10000, -10000, -10000] for i in range(batch_count)]
 	
-	for i in range(modelnum):
+	for i in range(batch_count):
 		for v in skin_packed_vertices_per_batch[i]:
 			pos = v[0]
 			bbox_per_model[i][0] = min(bbox_per_model[i][0], pos[0])
@@ -521,13 +548,13 @@ def SaveMSBSkinned(context, filepath):
 			boneweight = v[5]
 			uv = v[3]
 			boneind = v[2]
-			outdata3 = pack('6f4B2f4B', pos[0], pos[1], pos[2], normal[0], normal[1], normal[2], boneweight[0], boneweight[1], boneweight[2], 0, uv[0], 1-uv[1], boneind[0], boneind[1], boneind[2], 0)
+			outdata3 = pack('6f4B2f4B', pos[0], pos[1], pos[2], normal[0], normal[1], normal[2], boneweight[2], boneweight[1], boneweight[0], 0, uv[0], 1-uv[1], boneind[2], boneind[1], boneind[0], 0)
 			sknfile.write(outdata3)
 			# write to file
 		
 		mat_ind = skin_packed_triangles_per_batch[i][0]
 		for t in skin_packed_triangles_per_batch[i][1]:
-			outdata4 = pack("4H", t[0], t[2], t[1], mat_ind)
+			outdata4 = pack("4H", t[0], t[1], t[2], mat_ind)
 			sknfile.write(outdata4)
 		
 		material = skin_packed_materials_per_batch[i]
