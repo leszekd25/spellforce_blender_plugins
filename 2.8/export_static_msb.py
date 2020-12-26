@@ -87,8 +87,8 @@ def SaveMSBStatic(context, filepath):
 	
 	
 	bpy.ops.object.mode_set(mode = 'OBJECT')
-	mesh.use_auto_smooth = True
-	mesh.calc_normals_split()
+	if(mesh.use_auto_smooth == True):
+		mesh.calc_normals_split()
 	
 	uv_layer = mesh.uv_layers[mesh.name]
 	uvs = []
@@ -111,7 +111,7 @@ def SaveMSBStatic(context, filepath):
 		t.append([p.vertices[0], p.vertices[2], p.vertices[1]])
 		
 		t2 = []
-		if mesh.has_custom_normals:
+		if mesh.use_auto_smooth == True:
 			for j in [0, 2, 1]:
 				t2.append(mesh.loops[i*3+j].normal)
 		else:

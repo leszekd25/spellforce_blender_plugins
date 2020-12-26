@@ -196,8 +196,8 @@ def SaveMSBSkinned(context, filepath):
 	modelnum = len(mesh.materials)
 	
 	bpy.ops.object.mode_set(mode = 'OBJECT')
-	mesh.use_auto_smooth = True
-	mesh.calc_normals_split()
+	if(mesh.use_auto_smooth == True):
+		mesh.calc_normals_split()
 	
 	uv_layer = mesh.uv_layers[mesh.name]
 	uvs = []
@@ -220,7 +220,7 @@ def SaveMSBSkinned(context, filepath):
 		t.append([p.vertices[0], p.vertices[2], p.vertices[1]])
 		
 		t2 = []
-		if mesh.has_custom_normals:
+		if mesh.use_auto_smooth == True:
 			for j in [0, 2, 1]:
 				t2.append(mesh.loops[i*3+j].normal)
 		else:
@@ -469,6 +469,7 @@ def SaveMSBSkinned(context, filepath):
 				bsi_part = []
 				for b in bones_per_batch[j]:
 					bsi_part.append(b)
+				print("BSI PART", bsi_part)
 					
 				vind_used = set()	   # indices in packed_vertices_per_material[i] used in this batch
 				for k, p in enumerate(triangles_batch_index):
@@ -487,7 +488,9 @@ def SaveMSBSkinned(context, filepath):
 				for k, v in enumerate(packed_vertices_per_material[i]):
 					if k in vind_used_inverted:
 						v2 = [[v[0][0], v[0][1], v[0][2]], [v[1][0], v[1][1], v[1][2]], [v[2][0], v[2][1], v[2][2]], [v[3][0], v[3][1]], v[4], [v[5][0], v[5][1], v[5][2]]] # copy vertex
+						print("RECALC ARGS", v2[2], v2[5])
 						v2[2] = recalculate_bone_indices(v2[2], v2[5], bsi_part)
+						print("RESULT", v2[2])
 						skin_packed_vertices_per_batch[-1].append(v2)
 				
 				skin_packed_triangles_per_batch.append([i, []])
