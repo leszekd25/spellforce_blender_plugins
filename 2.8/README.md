@@ -24,9 +24,7 @@ requirements:
 
 -all faces must be triangles
 
--no two points on the UV map may overlap (edges and faces can intersect alright though)
-
--all materials in a mesh must have an exact node layout (import_static_msb.py takes care of that, you can look up models loaded through that plugin for node layout lookup)
+-all materials in a mesh must have an exact node layout (import_static/skinned_msb.py takes care of that, you can look up models loaded through that plugin to see how it looks like)
 
 usage: File -> Export...
 
@@ -95,3 +93,11 @@ requirements:
 usage: File -> Export...
 
 **note**: .bob animation files go to animation folder in spellforce directory
+
+# import_static_skin_msb.py
+
+this is something you can use on original SKIN .msb files, to see how they look like (specifically normals, since they differ from the STATIC .msb file normals, sometimes significantly)
+
+files imported with this plugin are not very good for anything else, so don't get any ideas :^)
+
+usage: File -> Import...
