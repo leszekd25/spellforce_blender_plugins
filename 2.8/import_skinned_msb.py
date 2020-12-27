@@ -62,7 +62,7 @@ class SFTriangle:
 	def __init__(self, data):
 		self.indices = [data[0], data[1], data[2], 0]
 		self.material = data[3]
-		self.group = 0
+		self.group = data[4]
 
 class SFMeshBuffer:
 	def __init__(self):

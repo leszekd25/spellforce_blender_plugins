@@ -39,7 +39,7 @@ class SFTriangle:
 		#self.indices = [data[0]+offset, data[1]+offset, data[2]+offset, 0]
 		self.indices = [data[0], data[1], data[2], 0]
 		self.material = data[3]
-		self.group = 0
+		self.group = data[4]
 
 class SFMeshBuffer:
 	def __init__(self):
@@ -102,7 +102,7 @@ def LoadMSBStatic(context, filepath):
 			max_v = max(max_v, model.meshbuffers[t].vertices[-1].ind)
 			
 		for i in range(indata2[1]):
-			model.meshbuffers[t].triangles.append(SFTriangle(unpack("4H", msbfile.read(8))))
+			model.meshbuffers[t].triangles.append(SFTriangle(unpack("3HBB", msbfile.read(8))))
 		
 		
 		msbfile.read(2)
